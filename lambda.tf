@@ -83,3 +83,46 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }*/
+
+resource "aws_cloudwatch_log_metric_filter" "info_count" {
+  name           = "info-count"
+  log_group_name = aws_cloudwatch_log_group.lambda_log_group.name # Replace with the name of your CloudWatch log group
+
+  pattern = "[INFO]" # The filter pattern to match "[INFO]"
+
+  metric_transformation {
+    name      = "info-count"
+    namespace = "/moviedb-api/xinwei"
+    value     = "1"
+    unit      = "None"
+  }
+}
+
+# Create the SNS topic
+resource "aws_sns_topic" "cloudwatch_alarm_topic" {
+  name = "${local.name_prefix}_cloudwatch_alarm_topic"
+}
+
+# Subscribe the email endpoint to the SNS topic
+resource "aws_sns_topic_subscription" "email_subscription" {
+  topic_arn = aws_sns_topic.cloudwatch_alarm_topic.arn
+  protocol  = "email"
+  endpoint  = "xinwei.cheng.88@gmail.com"
+}
+
+# Create the CloudWatch Alarm
+resource "aws_cloudwatch_metric_alarm" "info_count_breach_alarm" {
+  alarm_name          = "${local.name_prefix}-info-count-breach"
+  comparison_operator = "GreaterThanThreshold" # Trigger when value is greater than threshold
+  evaluation_periods  = 1                      # Number of periods to evaluate
+  metric_name         = "info-count"
+  namespace           = aws_cloudwatch_log_metric_filter.info_count.metric_transformation[0].namespace # Replace <alias> with your desired namespace alias
+  period              = 60                     # 1 minute (in seconds)
+  statistic           = "Sum"                  # Sum statistic
+  threshold           = 10                     # Static threshold
+
+  # Send notification to SNS topic
+  alarm_actions = [
+    aws_sns_topic.cloudwatch_alarm_topic.arn
+  ]
+}
